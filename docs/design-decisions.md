@@ -71,10 +71,11 @@
 | `type` | VARCHAR(16) NOT NULL | `EARN` / `EARN_CANCEL` / `USE` / `USE_CANCEL` |
 | `amount` | BIGINT NOT NULL, > 0 | 요청 금액 |
 | `order_no` | VARCHAR(64) NULL | `USE` 에 필수. `USE_CANCEL` 은 원 사용의 주문번호 복사 |
+| `use_order_no` | VARCHAR(64) NULL | `USE` 거래에만 `order_no` 와 같은 값. 주문 이중 사용 방지용 유일 제약 컬럼 (H2 에 부분 유일 인덱스가 없어 분리) |
 | `related_transaction_id` | BIGINT NULL FK | `EARN_CANCEL`→원 적립 거래, `USE_CANCEL`→원 사용 거래, 재적립 `EARN`→원인 사용취소 거래 |
 | `created_at` | TIMESTAMP NOT NULL | |
 
-제약: `(account_id, order_no)` 는 `type='USE'` 에서 유일 (같은 주문의 이중 사용 방지 — §7 가정).
+제약: `UNIQUE(account_id, use_order_no)` (NULL 은 중복 허용) — 같은 주문의 이중 사용 방지(§7 가정).
 
 ### 3.4 `point_transaction_detail` — 거래 상세 (적립 건별 금액 이동)
 
@@ -123,7 +124,7 @@
 ### 5.4 사용취소
 1. pointKey 로 `USE` 거래 조회 → 계정 잠금. 검증: `1 ≤ amount ≤ 사용액 − 기취소액`.
 2. 원 사용의 `OUT` 상세를 `seq` 순으로 돌며, 상세별 남은 취소 가능액(상세 금액 − 그 상세의 IN 합) 만큼 취소액을 배분.
-3. 상세별 복원: 원 적립 건이 `ACTIVE` 이고 `expires_at > now` 면 `remaining_amount += x`, `IN` 상세(earning=원 적립 건). 그 외(만료·적립취소됨)면 **신규 적립**: `EARN` 거래(related=이 사용취소 거래) + 적립 건(`kind` 는 원 적립 건 상속, `expires_at = now + 기본 일수`, `reissued_from_transaction_id` = 이 사용취소 거래) 생성 후 `IN` 상세(earning=새 적립 건).
+3. 상세별 복원: 원 적립 건이 `ACTIVE` 이고 `expires_at > now` 면 `remaining_amount += x`, `IN` 상세(earning=원 적립 건). 그 외(만료)면 **신규 적립**(적립취소된 건은 사용 이력이 없어 이 경로에 올 수 없지만, 방어적으로 같은 분기로 처리): `EARN` 거래(related=이 사용취소 거래) + 적립 건(`kind` 는 원 적립 건 상속, `expires_at = now + 기본 일수`, `reissued_from_transaction_id` = 이 사용취소 거래) 생성 후 `IN` 상세(earning=새 적립 건).
 4. 전부 한 트랜잭션. 신규 적립 실패 시 취소도 롤백.
 5. **한도 검사 없음**: 사용취소·재적립은 1회 적립 한도·보유 한도를 적용하지 않는다(쓴 것을 돌려주는 것이지 새로 주는 것이 아님).
 6. 응답: pointKey(D), 취소액, 복원 상세(적립 건별 금액, 재적립이면 새 pointKey), 잔액, 남은 취소 가능액.
@@ -152,8 +153,9 @@
 | HTTP | code | 상황 |
 |---|---|---|
 | 400 | `INVALID_REQUEST` | 필수값 누락, 형식 오류, 금액 ≤ 0 |
-| 400 | `EARN_AMOUNT_OUT_OF_RANGE` | 1회 적립 범위 밖 |
-| 400 | `EXPIRY_OUT_OF_RANGE` | 만료일수 범위 밖 |
+| 400 | `EARN_AMOUNT_OUT_OF_RANGE` | 1회 적립 범위 밖 (`Long.MAX` 등 거대 값 포함). 범위 검증은 한도 검사보다 먼저 수행해 덧셈 오버플로를 막는다 |
+| 400 | `EXPIRY_OUT_OF_RANGE` | 만료일수 범위 밖 (0 포함) |
+| 400 | `INVALID_REQUEST` | JSON 숫자가 long 범위를 넘는 등 역직렬화 불가 |
 | 404 | `MEMBER_NOT_FOUND` | 계정 없음 (조회·사용·취소) |
 | 404 | `POINT_KEY_NOT_FOUND` | pointKey 없음 또는 타입 불일치 |
 | 409 | `BALANCE_LIMIT_EXCEEDED` | 적립 시 보유 한도 초과 |
@@ -181,6 +183,8 @@
 | 멱등키(Idempotency-Key) | 미구현. 주문번호 유일 제약이 사용의 재전송을 막음. 확장 방향으로 README 에 기술 | 요구사항 외 |
 | 만료 배치 | 미구현. 잔액·사용 대상이 `expires_at` 로 판정되므로 불필요 | 요구사항 외 |
 | 동시성 | 회원 계정 행 `PESSIMISTIC_WRITE` 잠금, 잠금 대기 3초 초과 → 409 `UPDATE_CONFLICT` | 같은 회원 직렬화, 다른 회원 병렬 |
+| 개인 한도를 현재 잔액보다 낮게 설정 | 허용. 기존 잔액은 유지하고 이후 적립만 차단 | 한도는 적립 시점 검사 |
+| 적립 건 불변식 | `remaining_amount = original_amount − Σ OUT(그 건) + Σ IN(그 건)`. 만료분 재적립은 새 건의 항이므로 원 건 식은 그대로 성립 | 검증 테스트 기준 |
 
 ## 8. 패키지 구성
 
