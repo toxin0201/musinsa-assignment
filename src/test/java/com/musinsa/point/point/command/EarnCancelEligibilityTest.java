@@ -1,18 +1,13 @@
 package com.musinsa.point.point.command;
 
+import static com.musinsa.point.support.ApiFailures.rejectionCodeOf;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
-import com.musinsa.point.account.PointAccount;
-import com.musinsa.point.account.PointAccountRepository;
-import com.musinsa.point.common.ApiException;
 import com.musinsa.point.common.ErrorCode;
 import com.musinsa.point.point.EarningStatus;
 import com.musinsa.point.point.PointEarning;
 import com.musinsa.point.point.PointEarningRepository;
 import com.musinsa.point.point.PointTransaction;
-import com.musinsa.point.point.PointTransactionDetail;
-import com.musinsa.point.point.PointTransactionDetailRepository;
 import com.musinsa.point.point.PointTransactionRepository;
 import com.musinsa.point.point.TransactionType;
 import com.musinsa.point.support.AbstractPointIntegrationTest;
@@ -32,7 +27,10 @@ class EarnCancelEligibilityTest extends AbstractPointIntegrationTest {
     private EarnCancelService earnCancelService;
 
     @Autowired
-    private PointAccountRepository accountRepository;
+    private UseService useService;
+
+    @Autowired
+    private UseCancelService useCancelService;
 
     @Autowired
     private PointEarningRepository earningRepository;
@@ -40,24 +38,12 @@ class EarnCancelEligibilityTest extends AbstractPointIntegrationTest {
     @Autowired
     private PointTransactionRepository transactionRepository;
 
-    @Autowired
-    private PointTransactionDetailRepository detailRepository;
-
     private PointEarning earningOf(String pointKey) {
         return earningRepository
                 .findByTransactionId(transactionRepository.findByPointKey(pointKey).orElseThrow().getId())
                 .orElseThrow();
     }
 
-    /** 사용 기능은 아직 없으므로 "이 적립이 주문에 쓰였다"는 상태를 데이터로 직접 만들어 둔다. */
-    private void recordUsage(String memberId, PointEarning earning, long amount, String orderNo) {
-        PointAccount account = accountRepository.findByMemberId(memberId).orElseThrow();
-        PointTransaction use = transactionRepository
-                .saveAndFlush(PointTransaction.use(account, "USE-" + orderNo, amount, orderNo, clock.instant()));
-        earning.deduct(amount);
-        earningRepository.saveAndFlush(earning);
-        detailRepository.saveAndFlush(PointTransactionDetail.out(use, earning, amount, 1));
-    }
 
     @Test
     @DisplayName("한 번도 쓰지 않은 적립은 취소되고 그만큼 잔액이 줄어든다")
@@ -84,12 +70,10 @@ class EarnCancelEligibilityTest extends AbstractPointIntegrationTest {
     @DisplayName("일부라도 주문에 쓰인 적립은 취소할 수 없고 상태도 잔액도 그대로다")
     void partlyUsedEarningCannotBeCanceled() {
         EarnResult earned = earnService.earn(MEMBER_ID, 1_000, null);
-        recordUsage(MEMBER_ID, earningOf(earned.pointKey()), 200, "O9");
+        useService.use(MEMBER_ID, "O9", 200);
 
-        ApiException rejected = catchThrowableOfType(
-                () -> earnCancelService.cancel(MEMBER_ID, earned.pointKey()), ApiException.class);
-
-        assertThat(rejected.getErrorCode()).isEqualTo(ErrorCode.EARN_ALREADY_USED);
+        assertThat(rejectionCodeOf(() -> earnCancelService.cancel(MEMBER_ID, earned.pointKey())))
+                .isEqualTo(ErrorCode.EARN_ALREADY_USED);
         PointEarning earning = earningOf(earned.pointKey());
         assertThat(earning.getStatus()).isEqualTo(EarningStatus.ACTIVE);
         assertThat(earning.getRemainingAmount()).isEqualTo(800);
@@ -100,23 +84,11 @@ class EarnCancelEligibilityTest extends AbstractPointIntegrationTest {
     @DisplayName("썼다가 전액 돌려받은 적립도 사용 이력이 남아 있어 취소할 수 없다")
     void fullyRestoredEarningStillCountsAsUsed() {
         EarnResult earned = earnService.earn(MEMBER_ID, 1_000, null);
-        PointEarning earning = earningOf(earned.pointKey());
-        recordUsage(MEMBER_ID, earning, 200, "O10");
-
-        PointAccount account = accountRepository.findByMemberId(MEMBER_ID).orElseThrow();
-        PointTransaction use = transactionRepository.findByPointKey("USE-O10").orElseThrow();
-        PointTransactionDetail outDetail = detailRepository.findOutgoingDetailsOfTransaction(use.getId()).get(0);
-        PointTransaction useCancel = transactionRepository.saveAndFlush(
-                PointTransaction.useCancel(account, "CANCEL-O10", 200, "O10", use.getId(), clock.instant()));
-        PointEarning reloaded = earningOf(earned.pointKey());
-        reloaded.restore(200);
-        earningRepository.saveAndFlush(reloaded);
-        detailRepository.saveAndFlush(
-                PointTransactionDetail.in(useCancel, reloaded, 200, outDetail.getId(), 1));
+        UseResult used = useService.use(MEMBER_ID, "O10", 200);
+        useCancelService.cancel(MEMBER_ID, used.pointKey(), 200);
 
         assertThat(earningOf(earned.pointKey()).getRemainingAmount()).isEqualTo(1_000);
-        assertThat(catchThrowableOfType(
-                () -> earnCancelService.cancel(MEMBER_ID, earned.pointKey()), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> earnCancelService.cancel(MEMBER_ID, earned.pointKey())))
                 .isEqualTo(ErrorCode.EARN_ALREADY_USED);
     }
 
@@ -140,8 +112,7 @@ class EarnCancelEligibilityTest extends AbstractPointIntegrationTest {
         earnCancelService.cancel(MEMBER_ID, earned.pointKey());
         long transactionCountAfterFirstCancel = transactionRepository.count();
 
-        assertThat(catchThrowableOfType(
-                () -> earnCancelService.cancel(MEMBER_ID, earned.pointKey()), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> earnCancelService.cancel(MEMBER_ID, earned.pointKey())))
                 .isEqualTo(ErrorCode.EARN_ALREADY_CANCELED);
         assertThat(transactionRepository.count()).isEqualTo(transactionCountAfterFirstCancel);
     }

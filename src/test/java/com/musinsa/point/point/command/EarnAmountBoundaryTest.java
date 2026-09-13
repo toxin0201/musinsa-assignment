@@ -53,8 +53,7 @@ class EarnAmountBoundaryTest extends AbstractPointIntegrationTest {
     void amountAboveTheUpperBoundLeavesNothingBehind() {
         earnService.earn(MEMBER_ID, 1_000, null);
 
-        ApiException rejected = catchThrowableOfType(
-                () -> earnService.earn(MEMBER_ID, 100_001, null), ApiException.class);
+        ApiException rejected = catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, 100_001, null));
 
         assertThat(rejected.getErrorCode()).isEqualTo(ErrorCode.EARN_AMOUNT_OUT_OF_RANGE);
         assertThat(balanceOf(MEMBER_ID)).isEqualTo(1_000);
@@ -65,9 +64,9 @@ class EarnAmountBoundaryTest extends AbstractPointIntegrationTest {
     @Test
     @DisplayName("0 이하 금액은 잘못된 요청으로 거절한다")
     void zeroOrNegativeAmountIsARequestError() {
-        assertThat(catchThrowableOfType(() -> earnService.earn(MEMBER_ID, 0, null), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, 0, null))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(catchThrowableOfType(() -> earnService.earn(MEMBER_ID, -100, null), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, -100, null))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
         assertThat(accountRepository.findByMemberId(MEMBER_ID)).isEmpty();
     }
@@ -77,7 +76,7 @@ class EarnAmountBoundaryTest extends AbstractPointIntegrationTest {
     void hugeAmountIsRejectedBeforeTouchingTheBalance() {
         earnService.earn(MEMBER_ID, 1_000, null);
 
-        assertThat(catchThrowableOfType(() -> earnService.earn(MEMBER_ID, Long.MAX_VALUE, null), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, Long.MAX_VALUE, null))
                 .getErrorCode()).isEqualTo(ErrorCode.EARN_AMOUNT_OUT_OF_RANGE);
         assertThat(balanceOf(MEMBER_ID)).isEqualTo(1_000);
     }
@@ -86,9 +85,9 @@ class EarnAmountBoundaryTest extends AbstractPointIntegrationTest {
     @DisplayName("실패한 적립을 섞어도 총잔액은 성공한 적립의 합과 같다")
     void balanceEqualsTheSumOfSuccessfulEarningsOnly() {
         earnService.earn(MEMBER_ID, 1, null);
-        catchThrowableOfType(() -> earnService.earn(MEMBER_ID, 0, null), ApiException.class);
+        catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, 0, null));
         earnService.earn(MEMBER_ID, 100_000, null);
-        catchThrowableOfType(() -> earnService.earn(MEMBER_ID, 100_001, null), ApiException.class);
+        catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, 100_001, null));
         earnService.earn(MEMBER_ID, 999, null);
 
         assertThat(balanceOf(MEMBER_ID)).isEqualTo(100_001 + 999);

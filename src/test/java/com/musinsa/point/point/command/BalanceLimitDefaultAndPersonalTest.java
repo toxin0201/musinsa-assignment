@@ -1,5 +1,6 @@
 package com.musinsa.point.point.command;
 
+import static com.musinsa.point.support.ApiFailures.rejectionCodeOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
@@ -47,7 +48,7 @@ class BalanceLimitDefaultAndPersonalTest extends AbstractPointIntegrationTest {
 
         assertThat(earnService.earn("M5", 100, null).balance()).isEqualTo(1_000_000);
 
-        ApiException rejected = catchThrowableOfType(() -> earnService.earn("M5", 1, null), ApiException.class);
+        ApiException rejected = catchThrowableOfType(ApiException.class, () -> earnService.earn("M5", 1, null));
         assertThat(rejected.getErrorCode()).isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
 
         PointAccount account = accountRepository.findByMemberId("M5").orElseThrow();
@@ -70,7 +71,7 @@ class BalanceLimitDefaultAndPersonalTest extends AbstractPointIntegrationTest {
         earnService.earn("M6", 1_900, null);
         setPersonalLimit("M6", 2_000L);
 
-        assertThat(catchThrowableOfType(() -> earnService.earn("M6", 200, null), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> earnService.earn("M6", 200, null)))
                 .isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
         assertThat(earnService.earn("M6", 100, null).balance()).isEqualTo(2_000);
     }
@@ -80,7 +81,7 @@ class BalanceLimitDefaultAndPersonalTest extends AbstractPointIntegrationTest {
     void clearingThePersonalLimitFallsBackToTheDefault() {
         earnService.earn("M6b", 1_900, null);
         setPersonalLimit("M6b", 2_000L);
-        catchThrowableOfType(() -> earnService.earn("M6b", 200, null), ApiException.class);
+        catchThrowableOfType(ApiException.class, () -> earnService.earn("M6b", 200, null));
 
         setPersonalLimit("M6b", null);
 
@@ -95,7 +96,7 @@ class BalanceLimitDefaultAndPersonalTest extends AbstractPointIntegrationTest {
 
         PointAccount account = accountRepository.findByMemberId("M6c").orElseThrow();
         assertThat(earningRepository.sumAvailableBalance(account.getId(), clock.instant())).isEqualTo(5_000);
-        assertThat(catchThrowableOfType(() -> earnService.earn("M6c", 1, null), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> earnService.earn("M6c", 1, null)))
                 .isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
     }
 }

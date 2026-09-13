@@ -16,7 +16,7 @@ class ExpiryPolicyTest {
     private final ExpiryPolicy policy = new ExpiryPolicy(TestPolicies.defaults());
 
     private ErrorCode rejectionCodeFor(Integer expireDays) {
-        return catchThrowableOfType(() -> policy.resolveExpiresAt(EARNED_AT, expireDays), ApiException.class)
+        return catchThrowableOfType(ApiException.class, () -> policy.resolveExpiresAt(EARNED_AT, expireDays))
                 .getErrorCode();
     }
 
@@ -53,7 +53,7 @@ class ExpiryPolicyTest {
         ExpiryPolicy leapPolicy = new ExpiryPolicy(TestPolicies.defaults());
 
         assertThat(leapPolicy.resolveExpiresAt(leapDay, 1_825)).isEqualTo(Instant.parse("2029-02-27T00:00:00Z"));
-        assertThat(catchThrowableOfType(() -> leapPolicy.resolveExpiresAt(leapDay, 1_826), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> leapPolicy.resolveExpiresAt(leapDay, 1_826))
                 .getErrorCode()).isEqualTo(ErrorCode.EXPIRY_OUT_OF_RANGE);
     }
 
@@ -69,10 +69,10 @@ class ExpiryPolicyTest {
         ExpiryPolicy shortLived = new ExpiryPolicy(TestPolicies.withExpiry(30, 7, 1));
 
         assertThat(shortLived.resolveExpiresAt(EARNED_AT, null)).isEqualTo(Instant.parse("2026-10-13T00:00:00Z"));
-        assertThat(catchThrowableOfType(() -> shortLived.resolveExpiresAt(EARNED_AT, 6), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> shortLived.resolveExpiresAt(EARNED_AT, 6))
                 .getErrorCode()).isEqualTo(ErrorCode.EXPIRY_OUT_OF_RANGE);
         assertThat(shortLived.resolveExpiresAt(EARNED_AT, 364)).isEqualTo(Instant.parse("2027-09-12T00:00:00Z"));
-        assertThat(catchThrowableOfType(() -> shortLived.resolveExpiresAt(EARNED_AT, 365), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> shortLived.resolveExpiresAt(EARNED_AT, 365))
                 .getErrorCode()).isEqualTo(ErrorCode.EXPIRY_OUT_OF_RANGE);
     }
 

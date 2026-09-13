@@ -29,7 +29,7 @@ class PointKeyNotFoundOrTypeMismatchTest extends AbstractPointIntegrationTest {
     private PointTransactionRepository transactionRepository;
 
     private ErrorCode cancelRejectionCode(String memberId, String pointKey) {
-        return catchThrowableOfType(() -> earnCancelService.cancel(memberId, pointKey), ApiException.class)
+        return catchThrowableOfType(ApiException.class, () -> earnCancelService.cancel(memberId, pointKey))
                 .getErrorCode();
     }
 

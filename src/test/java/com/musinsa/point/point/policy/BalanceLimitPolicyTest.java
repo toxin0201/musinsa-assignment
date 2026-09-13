@@ -1,5 +1,6 @@
 package com.musinsa.point.point.policy;
 
+import static com.musinsa.point.support.ApiFailures.rejectionCodeOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -18,7 +19,7 @@ class BalanceLimitPolicyTest {
     void memberWithoutPersonalLimitFollowsTheDefault() {
         assertThatCode(() -> policy.validate(999_900, 100, null)).doesNotThrowAnyException();
 
-        assertThat(catchThrowableOfType(() -> policy.validate(1_000_000, 1, null), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> policy.validate(1_000_000, 1, null))
                 .getErrorCode()).isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
     }
 
@@ -31,7 +32,7 @@ class BalanceLimitPolicyTest {
     @Test
     @DisplayName("회원에게 개인 한도가 있으면 설정 기본값보다 그 값이 앞선다")
     void personalLimitWinsOverTheDefault() {
-        assertThat(catchThrowableOfType(() -> policy.validate(1_900, 200, 2_000L), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> policy.validate(1_900, 200, 2_000L))
                 .getErrorCode()).isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
         assertThatCode(() -> policy.validate(1_900, 100, 2_000L)).doesNotThrowAnyException();
     }
@@ -45,7 +46,7 @@ class BalanceLimitPolicyTest {
     @Test
     @DisplayName("개인 한도가 0 이면 어떤 적립도 한도를 넘는다")
     void zeroPersonalLimitBlocksEveryEarning() {
-        assertThat(catchThrowableOfType(() -> policy.validate(0, 1, 0L), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> policy.validate(0, 1, 0L)))
                 .isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
     }
 
@@ -55,7 +56,7 @@ class BalanceLimitPolicyTest {
         BalanceLimitPolicy tight = new BalanceLimitPolicy(TestPolicies.withDefaultMaxBalance(500));
 
         assertThatCode(() -> tight.validate(400, 100, null)).doesNotThrowAnyException();
-        assertThat(catchThrowableOfType(() -> tight.validate(400, 101, null), ApiException.class).getErrorCode())
+        assertThat(rejectionCodeOf(() -> tight.validate(400, 101, null)))
                 .isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
     }
 }

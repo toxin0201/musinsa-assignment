@@ -60,17 +60,13 @@ class ManualEarnIdentificationTest extends AbstractPointIntegrationTest {
     @Test
     @DisplayName("관리자 정보 없이는 수기 적립을 만들 수 없다")
     void manualEarningRequiresAdminIdAndReason() {
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, null, "보상"), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, null, "보상"))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, "  ", "보상"), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, " ", "보상"))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, "admin01", null), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, "admin01", null))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, "admin01", " "), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 5_000, null, "admin01", " "))
                 .getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
         assertThat(earningRepository.count()).isZero();
     }
@@ -78,11 +74,9 @@ class ManualEarnIdentificationTest extends AbstractPointIntegrationTest {
     @Test
     @DisplayName("수기 적립도 1회 적립 금액과 만료일수 규칙을 똑같이 지킨다")
     void manualEarningObeysTheSameAmountAndExpiryRules() {
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 100_001, null, "admin01", "보상"), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 100_001, null, "admin01", "보상"))
                 .getErrorCode()).isEqualTo(ErrorCode.EARN_AMOUNT_OUT_OF_RANGE);
-        assertThat(catchThrowableOfType(
-                () -> earnService.earnByAdmin(MEMBER_ID, 100, 0, "admin01", "보상"), ApiException.class)
+        assertThat(catchThrowableOfType(ApiException.class, () -> earnService.earnByAdmin(MEMBER_ID, 100, 0, "admin01", "보상"))
                 .getErrorCode()).isEqualTo(ErrorCode.EXPIRY_OUT_OF_RANGE);
     }
 }

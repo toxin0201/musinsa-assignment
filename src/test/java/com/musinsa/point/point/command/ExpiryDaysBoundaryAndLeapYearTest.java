@@ -20,7 +20,7 @@ class ExpiryDaysBoundaryAndLeapYearTest extends AbstractPointIntegrationTest {
     private EarnService earnService;
 
     private ErrorCode rejectionCodeFor(int expireDays) {
-        return catchThrowableOfType(() -> earnService.earn(MEMBER_ID, 1_000, expireDays), ApiException.class)
+        return catchThrowableOfType(ApiException.class, () -> earnService.earn(MEMBER_ID, 1_000, expireDays))
                 .getErrorCode();
     }
 

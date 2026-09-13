@@ -1,6 +1,7 @@
 package com.musinsa.point.point.command;
 
 import com.musinsa.point.account.PointAccount;
+import com.musinsa.point.account.PointAccountLocker;
 import com.musinsa.point.common.ApiException;
 import com.musinsa.point.common.ErrorCode;
 import com.musinsa.point.common.PointKeyGenerator;
@@ -15,7 +16,8 @@ import com.musinsa.point.point.policy.ExpiryPolicy;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 포인트 적립. 일반 적립과 관리자 수기 지급은 기록되는 종류만 다르고 검사 규칙은 같다. */
 @Service
@@ -29,11 +31,13 @@ public class EarnService {
     private final BalanceLimitPolicy balanceLimitPolicy;
     private final PointKeyGenerator pointKeyGenerator;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
 
     public EarnService(PointAccountLocker accountLocker, PointEarningRepository earningRepository,
             PointTransactionRepository transactionRepository, EarnAmountPolicy earnAmountPolicy,
             ExpiryPolicy expiryPolicy, BalanceLimitPolicy balanceLimitPolicy,
-            PointKeyGenerator pointKeyGenerator, Clock clock) {
+            PointKeyGenerator pointKeyGenerator, Clock clock,
+            PlatformTransactionManager transactionManager) {
         this.accountLocker = accountLocker;
         this.earningRepository = earningRepository;
         this.transactionRepository = transactionRepository;
@@ -42,14 +46,13 @@ public class EarnService {
         this.balanceLimitPolicy = balanceLimitPolicy;
         this.pointKeyGenerator = pointKeyGenerator;
         this.clock = clock;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public EarnResult earn(String memberId, long amount, Integer expireDays) {
         return doEarn(memberId, amount, expireDays, EarningKind.GENERAL, null, null);
     }
 
-    @Transactional
     public EarnResult earnByAdmin(String memberId, long amount, Integer expireDays, String adminId, String reason) {
         requireText(adminId, "관리자 식별자");
         requireText(reason, "지급 사유");
@@ -60,8 +63,16 @@ public class EarnService {
             String adminId, String reason) {
         // 금액 범위를 먼저 본다. 이 검사를 통과한 값만 잔액과 더하므로 덧셈이 넘칠 일이 없다.
         earnAmountPolicy.validate(amount);
+        // 계정 열기는 적립 트랜잭션 밖에서 끝낸다 — 이유는 PointAccountLocker.openIfAbsent 참조.
+        accountLocker.openIfAbsent(memberId);
 
-        PointAccount account = accountLocker.lockOrOpen(memberId);
+        return transactionTemplate.execute(status ->
+                recordEarning(memberId, amount, expireDays, kind, adminId, reason));
+    }
+
+    private EarnResult recordEarning(String memberId, long amount, Integer expireDays, EarningKind kind,
+            String adminId, String reason) {
+        PointAccount account = accountLocker.lockExisting(memberId);
         Instant now = clock.instant();
         Instant expiresAt = expiryPolicy.resolveExpiresAt(now, expireDays);
 

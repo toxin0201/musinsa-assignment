@@ -146,7 +146,7 @@
 | 사용취소 | `POST /members/{memberId}/points/use/{pointKey}/cancel` | `amount` | `pointKey`, `canceledAmount`, `restorations[{earningPointKey, amount, reissued, newEarningPointKey?}]`, `balance`, `remainingCancelableAmount` |
 | 잔액 | `GET /members/{memberId}/points/balance` | | `balance`, `asOf` |
 | 적립별 사용 내역 | `GET /members/{memberId}/points/earn/{pointKey}/usages` | | `earning{...}`, `usages[{orderNo, usePointKey, usedAmount, canceledAmount, netUsedAmount}]` |
-| 개인 보유 한도 변경 | `PUT /admin/members/{memberId}/points/limit` | `maxBalance` (null 이면 기본값으로) | `memberId`, `maxBalance` |
+| 개인 보유 한도 변경 | `PUT /admin/members/{memberId}/points/limit` | `maxBalance` (null 이면 기본값으로, 1 이상) | `memberId`, `maxBalance` |
 
 오류코드
 
@@ -171,7 +171,7 @@
 
 | 미정 사항 | 가정 | 근거 |
 |---|---|---|
-| 회원 계정 생성 | 첫 적립 시 자동 생성. 계정 없는 회원의 사용·조회는 404 | 회원 API 가 과제 범위 밖 |
+| 회원 계정 생성 | 첫 적립 시 자동 생성. 관리자 한도 변경도 계정이 없으면 생성 후 설정. 계정 없는 회원의 사용·조회는 404 | 회원 API 가 과제 범위 밖 |
 | 같은 주문번호로 두 번 사용 | 거절(409) | 이중 사용 방지, 재전송 안전 |
 | 사용됐다가 전액 복원된 적립의 적립취소 | 불가 | "일부가 사용된 경우 취소 불가"를 이력 기준으로 해석 |
 | 만료됐지만 미사용인 적립의 적립취소 | 가능 | 취소 조건은 사용 여부뿐 |
@@ -184,7 +184,7 @@
 | 만료 배치 | 미구현. 잔액·사용 대상이 `expires_at` 로 판정되므로 불필요 | 요구사항 외 |
 | 동시성 | 회원 계정 행 `PESSIMISTIC_WRITE` 잠금, 잠금 대기 3초 초과 → 409 `UPDATE_CONFLICT` | 같은 회원 직렬화, 다른 회원 병렬 |
 | 개인 한도를 현재 잔액보다 낮게 설정 | 허용. 기존 잔액은 유지하고 이후 적립만 차단 | 한도는 적립 시점 검사 |
-| 적립 건 불변식 | `remaining_amount = original_amount − Σ OUT(그 건) + Σ IN(그 건)`. 만료분 재적립은 새 건의 항이므로 원 건 식은 그대로 성립 | 검증 테스트 기준 |
+| 적립 건 불변식 | `remaining_amount = original_amount − Σ OUT(그 건) + Σ IN(그 건, 복원분만)`. 재적립 건을 만든 IN 상세는 그 건의 `original_amount` 자체이므로 Σ IN 에 다시 더하지 않는다(이중 집계 방지) | 검증 테스트 기준 |
 
 ## 8. 패키지 구성
 

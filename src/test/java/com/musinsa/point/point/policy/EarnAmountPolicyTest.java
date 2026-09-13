@@ -1,9 +1,9 @@
 package com.musinsa.point.point.policy;
 
+import static com.musinsa.point.support.ApiFailures.rejectionCodeOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.musinsa.point.common.ApiException;
 import com.musinsa.point.common.ErrorCode;
@@ -15,7 +15,7 @@ class EarnAmountPolicyTest {
     private final EarnAmountPolicy policy = new EarnAmountPolicy(TestPolicies.defaults());
 
     private ErrorCode rejectionCodeFor(long amount) {
-        return catchThrowableOfType(() -> policy.validate(amount), ApiException.class).getErrorCode();
+        return rejectionCodeOf(() -> policy.validate(amount));
     }
 
     @Test
