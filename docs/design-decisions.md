@@ -207,8 +207,9 @@
 | `@WebMvcTest` | 요청 검증 400, 오류 본문, 404/405/415 |
 | `@SpringBootTest` | **예시 A~E 전 과정**(잔액 1,400, C 잔여 취소액 100, E 생성, B 400), 반복 부분 취소, 전액 취소, 수기 우선·만료 순, 적립취소 조건, 한도(개인별 컬럼 우선), 같은 회원 동시 사용·취소(증가분 유실 없음, 잔액 음수 없음), 재적립 실패 시 롤백, 불변식(적립 건 잔액 = 최초 − OUT 합 + IN 합) |
 
-## 10. 제출물 생성
+## 10. 제출물 생성 (완료)
 
-- ERD: 구현 후 `schema.sql` 기준으로 작성해 `src/main/resources/docs/erd.pdf`(+`.png`). 테이블·컬럼·키·관계만.
-- AWS 구성도(옵션): `src/main/resources/docs/aws-architecture.pdf`. ALB → ECS Fargate(2 AZ) → Aurora MySQL Multi-AZ, CloudWatch, Secrets Manager. 만료 배치가 없으므로 워커 없음.
-- README: 요약(실행·테스트) → 설계 핵심 → API → 가정 표 → ERD·AWS 링크.
+- ERD: [`src/main/resources/docs/erd.pdf`](../src/main/resources/docs/erd.pdf) / [`erd.png`](../src/main/resources/docs/erd.png). `schema.sql` 기준 테이블 4개·컬럼·키·관계·카디널리티, 예시 C·D 의 거래 상세 행 표 포함.
+- AWS 구성도(옵션): [`src/main/resources/docs/aws-architecture.pdf`](../src/main/resources/docs/aws-architecture.pdf) / [`aws-architecture.png`](../src/main/resources/docs/aws-architecture.png). Route53/ALB(2 AZ) → ECS Fargate(2 AZ) → Aurora MySQL Multi-AZ, CloudWatch, Secrets Manager, ECR, GitHub Actions 배포 파이프라인. 만료 배치가 없으므로 워커 없음.
+- README: [`README.md`](../README.md). 요약(빌드·실행·테스트, API 표, 검증 결과)→ 설계 → API 명세(실제 curl 응답 인용) → 예시 A~E → 가정 표 → 동시성 → 테스트 구성 → 한계·확장 → AWS 요약.
+- 문서-코드 일치 재확인: (1) 잠금 대기 상한은 §7에서 밝힌 대로 별도 설정 키가 아니라 H2 접속 URL 의 `LOCK_TIMEOUT` 으로만 제어한다(의도적 결정, §2 참고). (2) 사용/사용취소 응답에는 `orderNo` 필드를 넣지 않았다(§6 응답 스키마가 원래 이 필드를 포함하지 않음). 둘 다 이 설계 문서(§3·§4·§6, 단일 진실 원천) 및 README 와 일치하며 기능 결함은 아니다.
