@@ -60,8 +60,7 @@ public class UseCancelService {
                 detailRepository.findOutgoingDetailsOfTransaction(useTransaction.getId());
         long cancelableAmount = useDetails.stream().mapToLong(this::remainingCancelableAmountOf).sum();
         if (amount < 1 || amount > cancelableAmount) {
-            throw new ApiException(ErrorCode.CANCEL_AMOUNT_EXCEEDED,
-                    "취소할 수 있는 금액은 1 이상 %d 이하입니다.".formatted(cancelableAmount));
+            throw new ApiException(ErrorCode.CANCEL_AMOUNT_EXCEEDED, cancelableRangeMessage(cancelableAmount));
         }
 
         Instant now = clock.instant();
@@ -126,6 +125,13 @@ public class UseCancelService {
                 account, pointKeyGenerator.generate(), amount, cancelTransaction.getId(), now));
         return earningRepository.save(PointEarning.reissued(account, reissueTransaction, origin.getKind(),
                 amount, now, expiryPolicy.resolveExpiresAt(now, null), cancelTransaction.getId()));
+    }
+
+    /** 돌려줄 것이 하나도 남지 않았는데 "1 이상 0 이하" 라고 적으면 읽는 쪽이 무엇을 고쳐야 할지 알 수 없다. */
+    private static String cancelableRangeMessage(long cancelableAmount) {
+        return cancelableAmount == 0
+                ? "취소할 수 있는 금액이 남아 있지 않습니다."
+                : "취소할 수 있는 금액은 1 이상 %d 이하입니다.".formatted(cancelableAmount);
     }
 
     /** 이 사용 줄에서 아직 돌려주지 않은 금액. 되돌아간 금액은 IN 상세가 이 줄을 가리키며 쌓인다. */

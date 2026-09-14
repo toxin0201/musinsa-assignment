@@ -44,9 +44,11 @@ class BalanceLimitPolicyTest {
     }
 
     @Test
-    @DisplayName("개인 한도가 0 이면 어떤 적립도 한도를 넘는다")
-    void zeroPersonalLimitBlocksEveryEarning() {
-        assertThat(rejectionCodeOf(() -> policy.validate(0, 1, 0L)))
+    @DisplayName("가장 낮은 개인 한도 1 에서는 1원 적립만 통과한다")
+    void theLowestPersonalLimitAllowsOnlyASingleUnit() {
+        assertThatCode(() -> policy.validate(0, 1, 1L)).doesNotThrowAnyException();
+
+        assertThat(rejectionCodeOf(() -> policy.validate(1, 1, 1L)))
                 .isEqualTo(ErrorCode.BALANCE_LIMIT_EXCEEDED);
     }
 

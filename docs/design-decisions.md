@@ -37,7 +37,7 @@
 |---|---|---|
 | `id` | BIGINT PK | |
 | `member_id` | VARCHAR(64) NOT NULL UNIQUE | 회원 식별자 (외부 시스템 값 그대로) |
-| `max_balance` | BIGINT NULL | 개인별 보유 한도. NULL 이면 설정 기본값 적용 |
+| `max_balance` | BIGINT NULL | 개인별 보유 한도. NULL 이면 설정 기본값 적용. 값을 두려면 1 이상(CHECK 제약, 서비스 하한과 같음) |
 | `created_at` | TIMESTAMP NOT NULL | |
 
 첫 적립 시 자동 생성한다. 모든 변경 명령은 이 행을 `FOR UPDATE` 로 잠근 뒤 진행한다.
@@ -105,10 +105,11 @@
 ## 5. 기능별 규칙
 
 ### 5.1 적립 (일반 / 관리자 수기)
-1. 계정 조회(없으면 생성) → 행 잠금.
-2. 검증: `min ≤ amount ≤ max`; 만료일수 `1 ≤ days` 이고 `expires_at < earned_at + 5년`(달력 기준); 사용 가능 잔액 + amount ≤ 보유 한도.
-3. `EARN` 거래 + 적립 건 생성(수기면 `kind=MANUAL`, `admin_id`, `reason` 필수).
-4. 응답: pointKey, 적립액, 만료 시각, 잔액.
+1. 계정을 보지 않고 판정할 수 있는 검증부터: `min ≤ amount ≤ max`; 만료일수 `1 ≤ days` 이고 `expires_at < earned_at + 5년`(달력 기준). 여기서 걸린 요청은 계정을 만들지도, 계정 행을 잠그지도 않는다.
+2. 계정 조회(없으면 생성) → 행 잠금.
+3. 보유 한도 검증: 사용 가능 잔액 + amount ≤ 보유 한도. 현재 잔액을 읽어야 알 수 있어 잠근 뒤에 본다.
+4. `EARN` 거래 + 적립 건 생성(수기면 `kind=MANUAL`, `admin_id`, `reason` 필수).
+5. 응답: pointKey, 적립액, 만료 시각, 잔액.
 
 ### 5.2 적립취소
 1. pointKey 로 `EARN` 거래·적립 건 조회 → 계정 잠금.
@@ -155,7 +156,7 @@
 | 400 | `INVALID_REQUEST` | 필수값 누락, 형식 오류, 금액 ≤ 0 |
 | 400 | `EARN_AMOUNT_OUT_OF_RANGE` | 1회 적립 범위 밖 (`Long.MAX` 등 거대 값 포함). 범위 검증은 한도 검사보다 먼저 수행해 덧셈 오버플로를 막는다 |
 | 400 | `EXPIRY_OUT_OF_RANGE` | 만료일수 범위 밖 (0 포함) |
-| 400 | `INVALID_REQUEST` | JSON 숫자가 long 범위를 넘는 등 역직렬화 불가 |
+| 400 | `INVALID_REQUEST` | JSON 숫자가 long 범위를 넘거나, 정수 자리에 소수 · 문자열이 와서 역직렬화 불가 |
 | 404 | `MEMBER_NOT_FOUND` | 계정 없음 (조회·사용·취소) |
 | 404 | `POINT_KEY_NOT_FOUND` | pointKey 없음 또는 타입 불일치 |
 | 409 | `BALANCE_LIMIT_EXCEEDED` | 적립 시 보유 한도 초과 |
@@ -163,9 +164,9 @@
 | 409 | `EARN_ALREADY_USED` | 사용 이력 있는 적립 취소 |
 | 409 | `EARN_ALREADY_CANCELED` | 이미 취소된 적립 |
 | 409 | `CANCEL_AMOUNT_EXCEEDED` | 취소 가능액 초과 |
-| 409 | `DUPLICATE_ORDER` | 같은 주문번호 재사용 |
+| 409 | `DUPLICATE_ORDER` | 같은 주문번호 재사용. 무결성 위반 중 `uk_point_transaction_use_order` 위반만 이 코드로 바꾼다 |
 | 404/405/415 | `NOT_FOUND` / `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | 프레임워크 오류도 같은 본문 |
-| 500 | `INTERNAL_ERROR` | 내부 메시지 미노출 |
+| 500 | `INTERNAL_ERROR` | 그 밖의 무결성 위반을 포함한 예상 밖 오류. 원인은 서버 로그에만 남기고 내부 메시지는 미노출 |
 
 ## 7. 요구사항에 없는 정책 — 가정
 
@@ -190,11 +191,11 @@
 
 | 패키지 | 구성 |
 |---|---|
-| `account` | `PointAccount`, `PointAccountRepository`, 한도 변경 |
+| `account` | `PointAccount`, `PointAccountRepository`, `PointAccountLocker`(잠금·계정 열기), `PointAccountRegistrar`(계정 생성 트랜잭션), `AccountLimitService`(한도 변경) |
 | `point` | `PointEarning`, `PointTransaction`, `PointTransactionDetail`, 리포지토리 |
-| `point.command` | `EarnService`, `UseService`, `CancelService` (트랜잭션 경계) |
+| `point.command` | `EarnService`, `EarnCancelService`, `UseService`, `UseCancelService` (트랜잭션 경계) |
 | `point.query` | `BalanceQueryService`, `EarningUsageQueryService` |
-| `point.policy` | `PointPolicyProperties`(설정), 검증 |
+| `point.policy` | `PointPolicyProperties`(설정), `EarnAmountPolicy`, `ExpiryPolicy`, `BalanceLimitPolicy` |
 | `api` | 컨트롤러, 요청·응답 DTO |
 | `common` | `ErrorCode`, `ApiException`, `GlobalExceptionHandler`, `PointKeyGenerator`, `Clock` 설정 |
 

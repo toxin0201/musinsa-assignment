@@ -89,8 +89,9 @@ public class UseService {
     }
 
     /**
-     * 사전 조회를 통과했더라도 같은 주문이 동시에 들어오면 여기서 유일 제약에 걸린다.
-     * 즉시 밀어 넣어 그 충돌을 이 자리에서 주문 중복으로 바꾼다.
+     * 같은 회원의 요청은 위에서 잡은 계정 행 잠금이 한 줄로 세우므로, 같은 주문의 재전송은 앞선 사전 조회에서 걸린다.
+     * 그래도 즉시 밀어 넣는 이유는, 계정 행을 잠그지 않고 이 표에 쓰는 경로가 나중에 생기더라도
+     * 유일 제약 위반이 여기서 주문 중복으로 바뀌어 나가도록 남겨 두기 위해서다.
      */
     private PointTransaction openUseTransaction(PointAccount account, String orderNo, long amount, Instant now) {
         try {

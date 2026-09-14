@@ -10,7 +10,7 @@ H2 인메모리 DB로 실행되며, 관리자 기능은 경로로만 분리했�
 
 ```bash
 ./gradlew bootRun          # http://localhost:8080 (기본 포트)
-./gradlew test             # 단위 + 슬라이스 + 통합 테스트 233건
+./gradlew test             # 단위 + 슬라이스 + 통합 테스트 253건
 ./gradlew clean build      # 전체 빌드 (jar: build/libs/point-0.0.1-SNAPSHOT.jar)
 ```
 
@@ -37,7 +37,7 @@ H2 인메모리 DB로 실행되며, 관리자 기능은 경로로만 분리했�
 
 **검증 결과**
 
-- 단위 · 슬라이스 · 통합 테스트 233건 전부 GREEN (`@DataJpaTest` 27건, `@WebMvcTest` 39건, `@SpringBootTest` 통합 133건, 순수 단위 33건, 애플리케이션 컨텍스트 로드 1건).
+- 단위 · 슬라이스 · 통합 테스트 253건 전부 GREEN (`@DataJpaTest` 29건, `@WebMvcTest` 47건, `@SpringBootTest` 통합 143건, 순수 단위 33건, 애플리케이션 컨텍스트 로드 1건).
 - 빌드된 jar 를 실제로 띄워 curl 로 예시 A~E, 수기 우선 소진, 적립취소 조건, 개인 한도, 오류 케이스, 관리자 필수값까지 왕복 검증 완료(§6 참고).
 
 **제출물 위치**
@@ -115,7 +115,7 @@ H2 인메모리 DB로 실행되며, 관리자 기능은 경로로만 분리했�
 
 | HTTP | code | 상황 |
 |---|---|---|
-| 400 | `INVALID_REQUEST` | 필수값 누락, 형식 오류, 금액 ≤ 0, JSON 역직렬화 실패(거대 숫자 등) |
+| 400 | `INVALID_REQUEST` | 필수값 누락, 형식 오류, 금액 ≤ 0, JSON 역직렬화 실패(거대 숫자, 정수 자리의 소수 · 문자열) |
 | 400 | `EARN_AMOUNT_OUT_OF_RANGE` | 1회 적립 범위(1~100,000) 밖 |
 | 400 | `EXPIRY_OUT_OF_RANGE` | 만료일수가 범위(1일 이상, 5년 미만) 밖 |
 | 404 | `MEMBER_NOT_FOUND` | 회원의 포인트 계정 없음 |
@@ -125,10 +125,10 @@ H2 인메모리 DB로 실행되며, 관리자 기능은 경로로만 분리했�
 | 409 | `EARN_ALREADY_USED` | 사용 이력 있는 적립 취소 시도 |
 | 409 | `EARN_ALREADY_CANCELED` | 이미 취소된 적립 취소 시도 |
 | 409 | `CANCEL_AMOUNT_EXCEEDED` | 사용취소 가능액 초과 |
-| 409 | `DUPLICATE_ORDER` | 같은 (회원, 주문번호)로 재사용 |
+| 409 | `DUPLICATE_ORDER` | 같은 (회원, 주문번호)로 재사용. 유일 제약 위반 중 이 제약(`uk_point_transaction_use_order`)만 해당 |
 | 409 | `UPDATE_CONFLICT` | 같은 회원의 다른 요청이 계정 행을 3초 넘게 쥐고 있음 |
 | 404/405/415 | `NOT_FOUND` / `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | 존재하지 않는 경로 / 지원하지 않는 메서드 · 미디어 타입도 같은 오류 본문 |
-| 500 | `INTERNAL_ERROR` | 내부 사정은 응답에 노출하지 않음 |
+| 500 | `INTERNAL_ERROR` | 그 밖의 무결성 위반을 포함한 예상 밖 오류. 원인은 서버 로그에만 남기고 응답에는 노출하지 않음 |
 
 ### 2.2 엔드포인트별 요청 · 응답 (실제 curl 왕복 캡처, `e2e_results.log` 실행분)
 
@@ -198,7 +198,7 @@ H2 인메모리 DB로 실행되며, 관리자 기능은 경로로만 분리했�
 **오류 응답 예시**
 
 ```
-409 CANCEL_AMOUNT_EXCEEDED: {"code":"CANCEL_AMOUNT_EXCEEDED","message":"취소할 수 있는 금액은 1 이상 0 이하입니다.","timestamp":"..."}
+409 CANCEL_AMOUNT_EXCEEDED: {"code":"CANCEL_AMOUNT_EXCEEDED","message":"취소할 수 있는 금액이 남아 있지 않습니다.","timestamp":"..."}
 409 EARN_ALREADY_USED:      {"code":"EARN_ALREADY_USED","message":"이미 사용된 적립은 취소할 수 없습니다.","timestamp":"..."}
 409 BALANCE_LIMIT_EXCEEDED: {"code":"BALANCE_LIMIT_EXCEEDED","message":"보유 한도 1000 를 초과합니다. 현재 사용 가능 잔액 0","timestamp":"..."}
 404 MEMBER_NOT_FOUND:       {"code":"MEMBER_NOT_FOUND","message":"회원의 포인트 계정을 찾을 수 없습니다.","timestamp":"..."}
@@ -252,7 +252,7 @@ A 몫 1,000 은 이미 만료됐으므로 새 적립 E 로 돌려주고, B 몫 1
 - **잠금 단위**: 회원 계정(`point_account`) 행을 `@Lock(PESSIMISTIC_WRITE)` 로 잠근다. 같은 회원의 요청은 직렬화되고, 다른 회원은 서로 막지 않는다.
 - **잠금 대기 상한**: H2 접속 URL 의 `LOCK_TIMEOUT=3000`(3초)으로 잡는다. 초과하면 `PessimisticLockingFailureException` / `LockTimeoutException` 을 잡아 409 `UPDATE_CONFLICT` 로 바꿔 응답한다.
 - **한 트랜잭션**: 적립 · 사용 · 사용취소는 각각 하나의 트랜잭션이다. 사용취소 중 재적립이 실패하면 취소 자체도 롤백된다(`ReissueFailureRollbackTest`).
-- **계정 자동 생성이 별도인 이유**: 첫 적립 시 계정을 만드는 쓰기는 별도 트랜잭션으로 커밋해, 통합 테스트가 매 테스트 시작마다 표를 비울 때 테스트 트랜잭션 롤백에 기대지 않고 명시적으로 `TRUNCATE` 할 수 있게 했다(`AbstractPointIntegrationTest`).
+- **계정 자동 생성이 명령 트랜잭션 밖인 이유**: 계정 만들기를 명령 트랜잭션 **안에서** 새 트랜잭션으로 부르면 요청 하나가 커넥션을 두 개(바깥 것과 안쪽 것) 동시에 쥔다. 동시 요청 수가 커넥션 풀 크기에 이르는 순간 모두가 서로의 두 번째 커넥션을 기다리며 멈춘다 — 동시성 테스트를 돌리다 발견했다. 그래서 계정 열기는 명령 트랜잭션을 열기 전에 끝내고, 커넥션은 하나만 잠깐 쓰고 돌려준다(`PointAccountLocker.openIfAbsent`). 같은 회원의 첫 요청이 겹쳐 유일 제약에 걸리면 먼저 열린 계정을 그대로 쓴다(`FirstEarnAccountOpeningRaceTest`).
 - **왜 낙관적 락이 아니라 비관적 락인가**: 적립 · 사용 · 사용취소가 모두 "현재 잔액을 읽고 그 잔액을 근거로 이동시키는" 연산이라 충돌이 흔하고, 실패 시 재시도보다 짧은 대기 후 명확한 409 가 클라이언트 처리에 더 낫다고 판단했다.
 - **검증**: `ConcurrentEarnNoLostUpdateTest`(같은 회원 동시 적립 유실 없음), `ConcurrentUseSerializationTest`(동시 사용 10건이 정확히 맞아떨어지면 전원 성공 · 잔액 0, 초과분은 부분 성공 + `INSUFFICIENT_BALANCE`, 잔액 음수 없음), `LockWaitTimeoutConflictTest`(3초 초과 → 409), `EarningBalanceInvariantAllScenariosTest`(적립 건 불변식)가 각각 `CountDownLatch` + 고정 스레드풀로 실제 동시 출발을 만들어 검증한다.
 
@@ -263,11 +263,11 @@ A 몫 1,000 은 이미 만료됐으므로 새 적립 E 로 돌려주고, B 몫 1
 | 슬라이스 | 건수 | 확인 사항 |
 |---|---|---|
 | 순수 단위 (Spring 컨텍스트 없음) | 33 | 정책 검증(범위 · 만료일수 · 5년 미만 달력 경계 · 윤년), 오류코드 매핑, pointKey 생성기, 엔티티 불변식 |
-| `@DataJpaTest` | 27 | 잠금 쿼리, 상세 집계 쿼리, 유일 제약, 스키마-엔티티 매핑(`ddl-auto=validate`) |
-| `@WebMvcTest` | 39 | 요청 검증 400, 오류 응답 본문, 404/405/415 |
-| `@SpringBootTest` 통합(`AbstractPointIntegrationTest`) | 133 | 예시 A~E 전 과정, 반복 부분 취소 · 전액 취소, 수기 우선 · 만료 순 소진, 적립취소 조건, 개인 한도, 동시성(유실 없음 · 잔액 음수 없음 · 3초 타임아웃), 재적립 실패 롤백, 방어적 분기(GAP-1 회귀) |
+| `@DataJpaTest` | 29 | 잠금 쿼리, 상세 집계 쿼리, 유일 제약(주문 · 계정 · 한도 하한), 스키마-엔티티 매핑(`ddl-auto=validate`) |
+| `@WebMvcTest` | 47 | 요청 검증 400(소수 · 문자열 금액 거절 포함), 오류 응답 본문, 무결성 위반 분기(409/500), 404/405/415 |
+| `@SpringBootTest` 통합(`AbstractPointIntegrationTest`) | 143 | 예시 A~E 전 과정, 반복 부분 취소 · 전액 취소, 수기 우선 · 만료 순 소진, 적립취소 조건, 개인 한도, 동시성(유실 없음 · 잔액 음수 없음 · 3초 타임아웃), 재적립 실패 롤백, 방어적 분기(GAP-1 회귀) |
 | 애플리케이션 컨텍스트 로드 | 1 | `PointApplicationTests` |
-| **합계** | **233** | 전부 GREEN |
+| **합계** | **253** | 전부 GREEN |
 
 ```bash
 ./gradlew test

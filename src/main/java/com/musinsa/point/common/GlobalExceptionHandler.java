@@ -3,6 +3,9 @@ package com.musinsa.point.common;
 import jakarta.persistence.LockTimeoutException;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +27,11 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /** 같은 주문을 두 번 쓰는 일을 막는 유일 제약. 이름은 {@code schema.sql} 이 정한다. */
+    private static final String USE_ORDER_CONSTRAINT = "uk_point_transaction_use_order";
 
     private final Clock clock;
 
@@ -72,12 +80,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 사용 서비스가 먼저 걸러 내므로 여기까지 오는 일은 드물다.
-     * 남은 가능성은 같은 주문이 동시에 들어와 (계정, 주문번호) 유일 제약에 걸린 경우다.
+     * 무결성 위반 중 주문 중복이라고 말할 수 있는 것은 (계정, 주문번호) 유일 제약뿐이다.
+     * 나머지는 우리가 예상하지 못한 상태이므로 원인을 로그에 남기고 500 으로 답한다 —
+     * 전부 409 로 뭉개면 고칠 곳이 있는 오류가 "정상적인 중복 요청" 처럼 보여 묻힌다.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handle(DataIntegrityViolationException exception) {
-        return respond(ErrorCode.DUPLICATE_ORDER, ErrorCode.DUPLICATE_ORDER.getDefaultMessage());
+        if (violatesUseOrderConstraint(exception)) {
+            return respond(ErrorCode.DUPLICATE_ORDER, ErrorCode.DUPLICATE_ORDER.getDefaultMessage());
+        }
+        log.error("무결성 제약을 어겨 요청을 처리하지 못했습니다.", exception);
+        return respond(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.getDefaultMessage());
     }
 
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
@@ -95,10 +108,28 @@ public class GlobalExceptionHandler {
         return respond(ErrorCode.UNSUPPORTED_MEDIA_TYPE, ErrorCode.UNSUPPORTED_MEDIA_TYPE.getDefaultMessage());
     }
 
-    /** 마지막 안전망. 내부 사정은 응답에 담지 않는다. */
+    /** 마지막 안전망. 내부 사정은 응답에 담지 않되, 원인은 사슬째로 로그에 남긴다. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handle(Exception exception) {
+        log.error("요청을 처리하지 못했습니다.", exception);
         return respond(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.getDefaultMessage());
+    }
+
+    /**
+     * 제약 이름은 드라이버마다 대소문자도, 사슬 안의 깊이도 다르게 실려 온다.
+     * 그래서 맨 위 메시지만 보지 않고 원인을 끝까지 따라가며 대소문자 없이 찾는다.
+     */
+    private static boolean violatesUseOrderConstraint(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains(USE_ORDER_CONSTRAINT)) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                return false;
+            }
+        }
+        return false;
     }
 
     private ResponseEntity<ErrorResponse> respond(ErrorCode errorCode, String message) {

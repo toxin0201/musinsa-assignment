@@ -61,20 +61,24 @@ public class EarnService {
 
     private EarnResult doEarn(String memberId, long amount, Integer expireDays, EarningKind kind,
             String adminId, String reason) {
-        // 금액 범위를 먼저 본다. 이 검사를 통과한 값만 잔액과 더하므로 덧셈이 넘칠 일이 없다.
+        // 회원의 지금 상태를 보지 않고도 판정할 수 있는 값부터 본다. 성공할 수 없는 요청이
+        // 계정을 만들거나 계정 행을 잠가 같은 회원의 다른 요청을 기다리게 할 이유가 없다.
+        // 금액 범위를 통과한 값만 잔액과 더하므로 아래 덧셈이 넘칠 일도 없다.
         earnAmountPolicy.validate(amount);
+        Instant now = clock.instant();
+        Instant expiresAt = expiryPolicy.resolveExpiresAt(now, expireDays);
+
         // 계정 열기는 적립 트랜잭션 밖에서 끝낸다 — 이유는 PointAccountLocker.openIfAbsent 참조.
         accountLocker.openIfAbsent(memberId);
 
         return transactionTemplate.execute(status ->
-                recordEarning(memberId, amount, expireDays, kind, adminId, reason));
+                recordEarning(memberId, amount, now, expiresAt, kind, adminId, reason));
     }
 
-    private EarnResult recordEarning(String memberId, long amount, Integer expireDays, EarningKind kind,
-            String adminId, String reason) {
+    /** 보유 한도만은 현재 잔액을 읽어야 알 수 있으므로 계정 행을 잠근 뒤에 본다. */
+    private EarnResult recordEarning(String memberId, long amount, Instant now, Instant expiresAt,
+            EarningKind kind, String adminId, String reason) {
         PointAccount account = accountLocker.lockExisting(memberId);
-        Instant now = clock.instant();
-        Instant expiresAt = expiryPolicy.resolveExpiresAt(now, expireDays);
 
         long availableBalance = earningRepository.sumAvailableBalance(account.getId(), now);
         balanceLimitPolicy.validate(availableBalance, amount, account.getMaxBalance());

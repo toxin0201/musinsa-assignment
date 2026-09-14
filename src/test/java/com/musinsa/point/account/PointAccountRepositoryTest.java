@@ -52,4 +52,29 @@ class PointAccountRepositoryTest {
         assertThatThrownBy(() -> accountRepository.saveAndFlush(PointAccount.open("LOCK-M2", NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    @DisplayName("한 푼도 담을 수 없는 개인 한도는 표가 받지 않는다")
+    void aLimitThatAllowsNothingIsRefusedByTheTable() {
+        PointAccount account = PointAccount.open("LOCK-M3", NOW);
+        account.changeMaxBalance(0L);
+
+        assertThatThrownBy(() -> accountRepository.saveAndFlush(account))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("가장 낮은 개인 한도 1 과 비워 둔 한도는 그대로 받는다")
+    void theLowestLimitAndAnEmptyLimitAreBothAccepted() {
+        PointAccount lowest = PointAccount.open("LOCK-M4", NOW);
+        lowest.changeMaxBalance(1L);
+        accountRepository.saveAndFlush(lowest);
+
+        accountRepository.saveAndFlush(PointAccount.open("LOCK-M5", NOW));
+
+        assertThat(accountRepository.findByMemberId("LOCK-M4")).get()
+                .extracting(PointAccount::getMaxBalance).isEqualTo(1L);
+        assertThat(accountRepository.findByMemberId("LOCK-M5")).get()
+                .extracting(PointAccount::getMaxBalance).isNull();
+    }
 }

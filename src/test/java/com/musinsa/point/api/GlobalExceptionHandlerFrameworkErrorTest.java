@@ -113,6 +113,34 @@ class GlobalExceptionHandlerFrameworkErrorTest {
     }
 
     @Test
+    @DisplayName("제약 이름이 원인 사슬 안쪽에 있어도 주문 중복으로 읽는다")
+    void theOrderConstraintIsFoundDeepInTheCauseChain() throws Exception {
+        willThrow(new DataIntegrityViolationException("could not execute statement",
+                new java.sql.SQLIntegrityConstraintViolationException(
+                        "Unique index or primary key violation: \"PUBLIC.UK_POINT_TRANSACTION_USE_ORDER_INDEX_5\"")))
+                .given(useService).use(any(), any(), anyLong());
+
+        mockMvc.perform(post(USE_PATH).contentType(MediaType.APPLICATION_JSON).content(USE_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_ORDER"));
+    }
+
+    @Test
+    @DisplayName("주문 제약이 아닌 무결성 위반을 주문 중복이라고 둘러대지 않는다")
+    void anUnrelatedIntegrityViolationIsNotDisguisedAsADuplicateOrder() throws Exception {
+        willThrow(new DataIntegrityViolationException(
+                "could not execute statement [Unique index or primary key violation: "
+                        + "\"PUBLIC.UK_POINT_ACCOUNT_MEMBER_INDEX_2\"]"))
+                .given(useService).use(any(), any(), anyLong());
+
+        mockMvc.perform(post(USE_PATH).contentType(MediaType.APPLICATION_JSON).content(USE_BODY))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("UK_POINT_ACCOUNT_MEMBER"))));
+    }
+
+    @Test
     @DisplayName("예상하지 못한 오류는 500 으로 돌려주되 내부 사정은 밖으로 내보내지 않는다")
     void anUnexpectedFailureNeverLeaksItsInternals() throws Exception {
         willThrow(new IllegalStateException("jdbc:h2:mem:point 비밀번호가 틀렸습니다"))

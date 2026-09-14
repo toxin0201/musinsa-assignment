@@ -13,7 +13,8 @@ CREATE TABLE point_account (
     max_balance BIGINT       NULL,
     created_at  TIMESTAMP    NOT NULL,
     CONSTRAINT uk_point_account_member UNIQUE (member_id),
-    CONSTRAINT ck_point_account_max_balance CHECK (max_balance IS NULL OR max_balance >= 0)
+    -- 한도를 두려면 최소 1 이다. 0 은 "한 푼도 못 받는 계정" 이라 서비스도 받지 않는다.
+    CONSTRAINT ck_point_account_max_balance CHECK (max_balance IS NULL OR max_balance >= 1)
 );
 
 -- 거래. 외부에 노출하는 식별자(point_key) 단위이며 적립 · 적립취소 · 사용 · 사용취소가 모두 한 테이블에 쌓인다.

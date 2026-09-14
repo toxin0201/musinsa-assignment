@@ -2,7 +2,9 @@ package com.musinsa.point.point.command;
 
 import static com.musinsa.point.support.ApiFailures.rejectionCodeOf;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import com.musinsa.point.common.ApiException;
 import com.musinsa.point.common.ErrorCode;
 import com.musinsa.point.point.PointTransactionDetailRepository;
 import com.musinsa.point.support.AbstractPointIntegrationTest;
@@ -79,6 +81,27 @@ class RemainingCancelableAmountExhaustionTest extends AbstractPointIntegrationTe
         assertThat(canceled.canceledAmount()).isEqualTo(600);
         assertThat(canceled.remainingCancelableAmount()).isZero();
         assertThat(canceled.balance()).isEqualTo(1_000);
+    }
+
+    @Test
+    @DisplayName("돌려줄 수 있는 범위를 벗어나면 그 범위를 그대로 알려 준다")
+    void theRejectionNamesTheRangeThatIsStillCancelable() {
+        String usePointKey = spend(600);
+
+        assertThat(catchThrowableOfType(ApiException.class,
+                () -> useCancelService.cancel(MEMBER_ID, usePointKey, 601)))
+                .hasMessage("취소할 수 있는 금액은 1 이상 600 이하입니다.");
+    }
+
+    @Test
+    @DisplayName("더 돌려줄 금액이 없으면 범위 대신 남은 것이 없다고 알린다")
+    void anExhaustedUseSaysThereIsNothingLeftToCancel() {
+        String usePointKey = spend(600);
+        useCancelService.cancel(MEMBER_ID, usePointKey, 600);
+
+        assertThat(catchThrowableOfType(ApiException.class,
+                () -> useCancelService.cancel(MEMBER_ID, usePointKey, 1)))
+                .hasMessage("취소할 수 있는 금액이 남아 있지 않습니다.");
     }
 
     @Test
