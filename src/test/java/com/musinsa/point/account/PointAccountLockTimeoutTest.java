@@ -32,9 +32,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class PointAccountLockTimeoutSpikeTest {
+class PointAccountLockTimeoutTest {
 
-    private static final String MEMBER_ID = "LOCK-SPIKE";
+    private static final String MEMBER_ID = "LOCK-TIMEOUT";
     private static final Duration CONFIGURED_WAIT = Duration.ofSeconds(3);
 
     @Autowired

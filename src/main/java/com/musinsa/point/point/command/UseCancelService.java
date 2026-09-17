@@ -53,13 +53,16 @@ public class UseCancelService {
 
     @Transactional
     public UseCancelResult cancel(String memberId, String usePointKey, long amount) {
+        if (amount < 1) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "취소 금액은 1 이상이어야 합니다.");
+        }
         PointAccount account = accountLocker.lockExisting(memberId);
         PointTransaction useTransaction = findUseTransactionOf(account, usePointKey);
 
         List<PointTransactionDetail> useDetails =
                 detailRepository.findOutgoingDetailsOfTransaction(useTransaction.getId());
         long cancelableAmount = useDetails.stream().mapToLong(this::remainingCancelableAmountOf).sum();
-        if (amount < 1 || amount > cancelableAmount) {
+        if (amount > cancelableAmount) {
             throw new ApiException(ErrorCode.CANCEL_AMOUNT_EXCEEDED, cancelableRangeMessage(cancelableAmount));
         }
 

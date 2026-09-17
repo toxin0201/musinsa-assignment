@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.musinsa.point.support.AbstractPointIntegrationTest;
+import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,16 @@ class BlankAndOversizedIdentifierBoundaryTest extends AbstractPointIntegrationTe
         mockMvc.perform(get("/api/v1/members//points/balance"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("공백뿐인 회원 식별자는 계정을 만들지 않고 400 으로 거절한다")
+    void aWhitespaceOnlyMemberIdIsRejected() throws Exception {
+        mockMvc.perform(post(URI.create("/api/v1/members/%20/points/earn"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":1000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test

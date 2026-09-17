@@ -125,9 +125,6 @@ public class GlobalExceptionHandler {
             if (message != null && message.toLowerCase(Locale.ROOT).contains(USE_ORDER_CONSTRAINT)) {
                 return true;
             }
-            if (cause.getCause() == cause) {
-                return false;
-            }
         }
         return false;
     }

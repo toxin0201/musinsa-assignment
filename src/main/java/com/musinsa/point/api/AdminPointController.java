@@ -5,6 +5,7 @@ import static com.musinsa.point.api.PointController.MEMBER_ID_MAX_LENGTH;
 import com.musinsa.point.account.AccountLimitService;
 import com.musinsa.point.point.command.EarnService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,14 +32,14 @@ public class AdminPointController {
     }
 
     @PostMapping("/earn")
-    public EarnResponse earnByAdmin(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
+    public EarnResponse earnByAdmin(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
             @Valid @RequestBody AdminEarnRequest request) {
         return EarnResponse.from(earnService.earnByAdmin(memberId, request.amount(), request.expireDays(),
                 request.adminId(), request.reason()));
     }
 
     @PutMapping("/limit")
-    public AccountLimitResponse changeLimit(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
+    public AccountLimitResponse changeLimit(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
             @Valid @RequestBody AccountLimitRequest request) {
         return AccountLimitResponse.from(accountLimitService.setMaxBalance(memberId, request.maxBalance()));
     }

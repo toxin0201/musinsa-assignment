@@ -5,6 +5,7 @@ import com.musinsa.point.point.command.EarnService;
 import com.musinsa.point.point.command.UseCancelService;
 import com.musinsa.point.point.command.UseService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,23 +38,23 @@ public class PointController {
     }
 
     @PostMapping("/earn")
-    public EarnResponse earn(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId, @Valid @RequestBody EarnRequest request) {
+    public EarnResponse earn(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId, @Valid @RequestBody EarnRequest request) {
         return EarnResponse.from(earnService.earn(memberId, request.amount(), request.expireDays()));
     }
 
     @PostMapping("/earn/{pointKey}/cancel")
-    public EarnCancelResponse cancelEarn(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
+    public EarnCancelResponse cancelEarn(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
             @PathVariable @Size(max = POINT_KEY_MAX_LENGTH) String pointKey) {
         return EarnCancelResponse.from(earnCancelService.cancel(memberId, pointKey));
     }
 
     @PostMapping("/use")
-    public UseResponse use(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId, @Valid @RequestBody UseRequest request) {
+    public UseResponse use(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId, @Valid @RequestBody UseRequest request) {
         return UseResponse.from(useService.use(memberId, request.orderNo(), request.amount()));
     }
 
     @PostMapping("/use/{pointKey}/cancel")
-    public UseCancelResponse cancelUse(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
+    public UseCancelResponse cancelUse(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
             @PathVariable @Size(max = POINT_KEY_MAX_LENGTH) String pointKey,
             @Valid @RequestBody UseCancelRequest request) {
         return UseCancelResponse.from(useCancelService.cancel(memberId, pointKey, request.amount()));

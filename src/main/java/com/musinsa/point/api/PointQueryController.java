@@ -5,6 +5,7 @@ import static com.musinsa.point.api.PointController.POINT_KEY_MAX_LENGTH;
 
 import com.musinsa.point.point.query.BalanceQueryService;
 import com.musinsa.point.point.query.EarningUsageQueryService;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,12 +29,12 @@ public class PointQueryController {
     }
 
     @GetMapping("/balance")
-    public BalanceResponse balance(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId) {
+    public BalanceResponse balance(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId) {
         return BalanceResponse.from(balanceQueryService.balance(memberId));
     }
 
     @GetMapping("/earn/{pointKey}/usages")
-    public EarningUsageResponse usages(@PathVariable @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
+    public EarningUsageResponse usages(@PathVariable @NotBlank @Size(max = MEMBER_ID_MAX_LENGTH) String memberId,
             @PathVariable @Size(max = POINT_KEY_MAX_LENGTH) String pointKey) {
         return EarningUsageResponse.from(earningUsageQueryService.usages(memberId, pointKey));
     }

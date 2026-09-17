@@ -61,14 +61,15 @@ class RemainingCancelableAmountExhaustionTest extends AbstractPointIntegrationTe
         assertThat(detailRepository.count()).isEqualTo(1);
     }
 
-    @ParameterizedTest(name = "{0}원 취소 요청은 거절된다")
+    @ParameterizedTest(name = "{0}원 취소 요청은 잘못된 요청으로 거절된다")
     @ValueSource(longs = {0, -1, Long.MIN_VALUE})
-    @DisplayName("취소 금액은 1원 이상이어야 한다")
+    @DisplayName("취소 금액은 1원 이상이어야 하며, 미달은 한도 초과가 아니라 잘못된 요청이다")
     void cancelAmountMustBeAtLeastOne(long amount) {
         String usePointKey = spend(600);
 
         assertThat(rejectionCodeOf(() -> useCancelService.cancel(MEMBER_ID, usePointKey, amount)))
-                .isEqualTo(ErrorCode.CANCEL_AMOUNT_EXCEEDED);
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThat(detailRepository.count()).isEqualTo(1);
     }
 
     @Test
